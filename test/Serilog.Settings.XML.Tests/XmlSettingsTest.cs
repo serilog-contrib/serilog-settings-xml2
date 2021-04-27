@@ -1,4 +1,5 @@
 using Serilog.Core;
+using Serilog.Enrichers;
 using Serilog.Events;
 using Serilog.Settings.XML.Tests.Support;
 using System.Xml.Linq;
@@ -8,13 +9,113 @@ namespace Serilog.Settings.XML.Tests
 {
     public class XmlSettingsTest
     {
-        private LoggerConfiguration ConfigureXml(string xml)
+        private static LoggerConfiguration ConfigureXml(string xml)
         {
             XElement xElement = XElement.Parse(xml);
             return new LoggerConfiguration()
                 .ReadFrom.Xml(xElement);
         }
 
+        #region Enrichers
+
+        [Fact]
+        public void Enricher()
+        {
+            const string xml = @"<?xml version=""1.0"" standalone=""yes"" ?>
+<Serilog>
+    <Using>Serilog.Enrichers.Thread</Using>
+    <Enricher Name=""WithThreadId"" />
+</Serilog>";
+
+            LogEvent evt = null;
+            using Logger log = ConfigureXml(xml)
+                .WriteTo.Sink(new DelegatingSink(e => evt = e))
+                .CreateLogger();
+
+            log.Write(Some.ErrorEvent());
+
+            Assert.True(evt.Properties.ContainsKey(ThreadIdEnricher.ThreadIdPropertyName), "Enricher ThreadId was configured. It should be enriched.");
+        }
+
+        [Fact]
+        public void EnricherWithSimpleArgs()
+        {
+            const string xml = @"<?xml version=""1.0"" standalone=""yes"" ?>
+<Serilog>
+    <Enricher Name=""WithProperty"">
+        <Name>MyProperty</Name>
+        <Value>123</Value>
+    </Enricher>
+</Serilog>";
+
+            LogEvent evt = null;
+            using Logger log = ConfigureXml(xml)
+                .WriteTo.Sink(new DelegatingSink(e => evt = e))
+                .CreateLogger();
+
+            log.Write(Some.ErrorEvent());
+
+            Assert.True(evt.Properties.ContainsKey("MyProperty"), "Enricher WithProperty was configured. It should be enriched.");
+        }
+
+        [Fact]
+        public void EnricherWithStaticArgs()
+        {
+            const string xml = @"<?xml version=""1.0"" standalone=""yes"" ?>
+<Serilog>
+    <Enricher Name=""WithProperty"">
+        <Name>Serilog.Enrichers.ThreadNameEnricher::ThreadNamePropertyName, Serilog.Enrichers.Thread</Name>
+        <Value>DefaultThread</Value>
+    </Enricher>
+</Serilog>";
+
+            LogEvent evt = null;
+            using Logger log = ConfigureXml(xml)
+                .WriteTo.Sink(new DelegatingSink(e => evt = e))
+                .CreateLogger();
+
+            log.Write(Some.ErrorEvent());
+
+            Assert.True(evt.Properties.ContainsKey(ThreadNameEnricher.ThreadNamePropertyName), "Enricher WithProperty was configured. It should be enriched.");
+        }
+
+        [Fact]
+        public void EnrichProperty()
+        {
+            const string xml = @"<?xml version=""1.0"" standalone=""yes"" ?>
+<Serilog>
+    <Property Name=""MyProperty"" Value=""Value"" />
+</Serilog>";
+
+            LogEvent evt = null;
+            using Logger log = ConfigureXml(xml)
+                .WriteTo.Sink(new DelegatingSink(e => evt = e))
+                .CreateLogger();
+
+            log.Write(Some.ErrorEvent());
+
+            Assert.True(evt.Properties.ContainsKey("MyProperty"), "Property was configured. It should be enriched.");
+        }
+
+        [Fact]
+        public void EnrichPropertyValue()
+        {
+            const string xml = @"<?xml version=""1.0"" standalone=""yes"" ?>
+<Serilog>
+    <Property Name=""MyProperty"">Value</Property>
+</Serilog>";
+
+            LogEvent evt = null;
+            using Logger log = ConfigureXml(xml)
+                .WriteTo.Sink(new DelegatingSink(e => evt = e))
+                .CreateLogger();
+
+            log.Write(Some.ErrorEvent());
+
+            Assert.True(evt.Properties.ContainsKey("MyProperty"), "Property was configured. It should be enriched.");
+        }
+
+        #endregion
 
         #region MinimumLevel
 
@@ -110,7 +211,6 @@ namespace Serilog.Settings.XML.Tests
 
             systemLogger.Write(Some.WarningEvent());
             Assert.False(evt is null, "LoggingLevelSwitch initial level was Warning for logger System.*. It should log Warning messages for SourceContext System.Bar");
-
         }
 
         [Theory]

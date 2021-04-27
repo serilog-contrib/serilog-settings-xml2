@@ -1,18 +1,24 @@
 ﻿using Serilog.Configuration;
 using Serilog.Core;
+using Serilog.Debugging;
 using Serilog.Events;
 using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 
 namespace Serilog.Settings.XML
 {
-    class XmlReader : ILoggerSettings
+    class XmlReader : IXmlReader
     {
         private const string LevelSwitchNameRegex = @"^\${0,1}[A-Za-z]+[A-Za-z0-9]*$";
 
         readonly XElement _section;
+
+        readonly IReadOnlyCollection<Assembly> _configurationAssemblies;
 
         readonly ResolutionContext _resolutionContext = new();
 
@@ -25,7 +31,7 @@ namespace Serilog.Settings.XML
         {
             XElement doc = LoadXMLFile(xmlFile);
             _section = GetSection(doc, sectionName);
-            //if (_section == null) throw new
+            _configurationAssemblies = LoadAssemblies();
         }
 
 
@@ -33,6 +39,15 @@ namespace Serilog.Settings.XML
         {
             if (section == null) throw new ArgumentNullException(nameof(section));
             _section = section;
+            _configurationAssemblies = LoadAssemblies();
+        }
+
+        // Used internally for processing nested configuration sections -- see GetMethodCalls below.
+        internal XmlReader(XElement configElement, IReadOnlyCollection<Assembly> configurationAssemblies, ResolutionContext resolutionContext)
+        {
+            _section = configElement ?? throw new ArgumentNullException(nameof(configElement));
+            _configurationAssemblies = configurationAssemblies ?? throw new ArgumentNullException(nameof(configurationAssemblies));
+            _resolutionContext = resolutionContext ?? throw new ArgumentNullException(nameof(resolutionContext));
         }
 
         /// <summary>
@@ -64,10 +79,210 @@ namespace Serilog.Settings.XML
 
         }
 
+        #region Sinks
+
+        void IXmlReader.ApplySinks(LoggerSinkConfiguration loggerSinkConfiguration)
+        {
+            //var methodCalls = GetMethodCalls(_section);
+            //CallConfigurationMethods(methodCalls, FindSinkConfigurationMethods(_configurationAssemblies), loggerSinkConfiguration);
+        }
+
+        #endregion
+
+        #region Enrichment
+
+        void IXmlReader.ApplyEnrichment(LoggerEnrichmentConfiguration loggerEnrichmentConfiguration)
+        {
+            //var methodCalls = GetMethodCalls(_section);
+            //CallConfigurationMethods(methodCalls, FindEventEnricherConfigurationMethods(_configurationAssemblies), loggerEnrichmentConfiguration);
+        }
+
         private void ApplyEnrichment(LoggerConfiguration loggerConfiguration)
         {
+            var enricherElements = _section.Elements("Enricher").ToList();
+            if (enricherElements.Count > 0)
+            {
+                var methodCalls = GetMethodCalls(enricherElements);
+                CallConfigurationMethods(methodCalls, FindEventEnricherConfigurationMethods(_configurationAssemblies), loggerConfiguration.Enrich);
+            }
 
+            var propertyElements = _section.Elements("Property").ToList();
+            if (propertyElements.Count > 0)
+            {
+                foreach (XElement propertyElement in propertyElements)
+                {
+                    string name = propertyElement.Attribute("Name")?.Value;
+                    string value = propertyElement.FirstNode?.NodeType == System.Xml.XmlNodeType.Text
+                        ? propertyElement.Value
+                        : propertyElement.Attribute("Value")?.Value;
+
+                    if (string.IsNullOrWhiteSpace(name))
+                    {
+                        throw new InvalidOperationException("Property has no name");
+                    }
+                    if (string.IsNullOrWhiteSpace(value))
+                    {
+                        throw new InvalidOperationException($"Property {name} has no value");
+                    }
+
+                    loggerConfiguration.Enrich.WithProperty(name, value);
+                }
+            }
         }
+
+        private static IList<MethodInfo> FindEventEnricherConfigurationMethods(IReadOnlyCollection<Assembly> configurationAssemblies)
+        {
+            var found = FindConfigurationExtensionMethods(configurationAssemblies, typeof(LoggerEnrichmentConfiguration));
+            if (configurationAssemblies.Contains(typeof(LoggerEnrichmentConfiguration).GetTypeInfo().Assembly))
+                found.AddRange(SurrogateConfigurationMethods.Enrich);
+
+            return found;
+        }
+
+        #endregion
+
+        #region Find Methods & Arguments
+
+        private static List<MethodInfo> FindConfigurationExtensionMethods(IReadOnlyCollection<Assembly> configurationAssemblies, Type configType)
+        {
+            return configurationAssemblies
+                .SelectMany(a => a.ExportedTypes
+                    .Select(t => t.GetTypeInfo())
+                    .Where(t => t.IsSealed && t.IsAbstract && !t.IsNested))
+                .SelectMany(t => t.DeclaredMethods)
+                .Where(m => m.IsStatic && m.IsPublic && m.IsDefined(typeof(ExtensionAttribute), false)
+                         && m.GetParameters()[0].ParameterType == configType)
+                .ToList();
+        }
+
+        private void CallConfigurationMethods(ILookup<string, Dictionary<string, IConfigurationArgumentValue>> methods, IList<MethodInfo> configurationMethods, object receiver)
+        {
+            foreach (var method in methods.SelectMany(g => g.Select(x => new { g.Key, Value = x })))
+            {
+                var methodInfo = SelectConfigurationMethod(configurationMethods, method.Key, method.Value.Keys);
+
+                if (methodInfo != null)
+                {
+                    var call = (from p in methodInfo.GetParameters().Skip(1)
+                                let directive = method.Value.FirstOrDefault(s => ParameterNameMatches(p.Name, s.Key))
+                                select directive.Key == null
+                                    ? GetImplicitValueForNotSpecifiedKey(p, methodInfo)
+                                    : directive.Value.ConvertTo(p.ParameterType, _resolutionContext)).ToList();
+
+                    call.Insert(0, receiver);
+                    methodInfo.Invoke(null, call.ToArray());
+                }
+            }
+        }
+
+        private static bool ParameterNameMatches(string actualParameterName, string suppliedName) =>
+            suppliedName.Equals(actualParameterName, StringComparison.OrdinalIgnoreCase);
+
+        private static bool ParameterNameMatches(string actualParameterName, IEnumerable<string> suppliedNames) =>
+            suppliedNames.Any(s => ParameterNameMatches(actualParameterName, s));
+
+        private static bool HasImplicitValueWhenNotSpecified(ParameterInfo paramInfo) =>
+            paramInfo.HasDefaultValue;
+
+        private object GetImplicitValueForNotSpecifiedKey(ParameterInfo parameter, MethodInfo methodToInvoke)
+        {
+            if (!HasImplicitValueWhenNotSpecified(parameter))
+            {
+                throw new InvalidOperationException("GetImplicitValueForNotSpecifiedKey() should only be called for parameters for which HasImplicitValueWhenNotSpecified() is true. " +
+                                                    "This means something is wrong in the Serilog.Settings.Xml code.");
+            }
+
+            return parameter.DefaultValue;
+        }
+
+        internal static MethodInfo SelectConfigurationMethod(IEnumerable<MethodInfo> candidateMethods, string name, IEnumerable<string> suppliedArgumentNames)
+        {
+            var selectedMethod = candidateMethods
+                .Where(m => m.Name == name
+                         && m.GetParameters()
+                            .Skip(1)
+                            .All(p => HasImplicitValueWhenNotSpecified(p) ||
+                                      ParameterNameMatches(p.Name, suppliedArgumentNames)))
+                .OrderByDescending(m =>
+                {
+                    var matchingArgs = m.GetParameters().Where(p => ParameterNameMatches(p.Name, suppliedArgumentNames)).ToList();
+
+                    // Prefer the configuration method with most number of matching arguments and of those the ones with
+                    // the most string type parameters to predict best match with least type casting
+                    return new Tuple<int, int>(
+                        matchingArgs.Count,
+                        matchingArgs.Count(p => p.ParameterType == typeof(string)));
+                })
+                .FirstOrDefault();
+
+            if (selectedMethod == null)
+            {
+                var methodsByName = candidateMethods
+                    .Where(m => m.Name == name)
+                    .Select(m => $"{m.Name}({string.Join(", ", m.GetParameters().Skip(1).Select(p => p.Name))})")
+                    .ToList();
+
+                if (methodsByName.Count == 0)
+                {
+                    SelfLog.WriteLine($"Unable to find a method called {name}. Candidate methods are:{Environment.NewLine}{string.Join(Environment.NewLine, candidateMethods)}");
+                }
+                else
+                {
+                    SelfLog.WriteLine($"Unable to find a method called {name} "
+                    + (suppliedArgumentNames.Any()
+                        ? "for supplied arguments: " + string.Join(", ", suppliedArgumentNames)
+                        : "with no supplied arguments")
+                    + ". Candidate methods are:"
+                    + Environment.NewLine
+                    + string.Join(Environment.NewLine, methodsByName));
+                }
+            }
+
+            return selectedMethod;
+        }
+
+        internal ILookup<string, Dictionary<string, IConfigurationArgumentValue>> GetMethodCalls(IList<XElement> elements)
+        {
+            return elements
+                .Select(element => new
+                {
+                    Name = element.Attribute("Name")?.Value,
+                    Args = element.HasElements
+                        ? element.Elements()
+                                 .Select(args => new
+                                 {
+                                     Name = args.Name.LocalName,
+                                     Value = GetArgumentValue(args.FirstNode, _configurationAssemblies)
+                                 })
+                                 .ToDictionary(a => a.Name, a => a.Value)
+                        : new Dictionary<string, IConfigurationArgumentValue>()
+                })
+                .Where(p => !string.IsNullOrWhiteSpace(p.Name))
+                .ToLookup(p => p.Name, p => p.Args);
+        }
+
+        internal static IConfigurationArgumentValue GetArgumentValue(XNode argumentNode, IReadOnlyCollection<Assembly> configurationAssemblies)
+        {
+            if (argumentNode == null)
+            {
+                throw new InvalidOperationException("Invalid argument");
+            }
+
+            if (argumentNode is XText text)
+            {
+                return new StringArgumentValue(text.Value);
+            }
+            else if (argumentNode is XElement element)
+            {
+                return new ObjectArgumentValue(element, configurationAssemblies);
+            }
+
+            throw new InvalidOperationException($"Argument value type unkown: {argumentNode.GetType().FullName}");
+        }
+
+        #endregion
+
+        #region MinimumLevel
 
         private void ApplyMinimumLevel(LoggerConfiguration loggerConfiguration)
         {
@@ -120,6 +335,20 @@ namespace Serilog.Settings.XML
             }
         }
 
+        static LogEventLevel ParseLogEventLevel(string value)
+        {
+            if (!Enum.TryParse(value, out LogEventLevel parsedLevel))
+                throw new InvalidOperationException($"The value {value} is not a valid Serilog level.");
+            return parsedLevel;
+        }
+
+        #endregion
+
+        #region Switches
+
+        internal static bool IsValidSwitchName(string input) =>
+            Regex.IsMatch(input, LevelSwitchNameRegex);
+
         private void ProcessLevelSwitchDeclarations()
         {
             var levelSwitchesElement = _section.Elements("LevelSwitches").FirstOrDefault();
@@ -156,16 +385,37 @@ namespace Serilog.Settings.XML
             }
         }
 
+        #endregion
 
-        internal static bool IsValidSwitchName(string input) =>
-            Regex.IsMatch(input, LevelSwitchNameRegex);
+        #region Usings
 
-        static LogEventLevel ParseLogEventLevel(string value)
+        private IReadOnlyCollection<Assembly> LoadAssemblies()
         {
-            if (!Enum.TryParse(value, out LogEventLevel parsedLevel))
-                throw new InvalidOperationException($"The value {value} is not a valid Serilog level.");
-            return parsedLevel;
+            var serilogAssembly = typeof(ILogger).Assembly;
+            var assemblies = new Dictionary<string, Assembly> { [serilogAssembly.FullName] = serilogAssembly };
+
+            foreach (var usingElement in _section.Elements("Using"))
+            {
+                var assemblyName = usingElement.FirstNode?.NodeType == System.Xml.XmlNodeType.Text
+                    ? usingElement.Value
+                    : usingElement.Attribute("Asm")?.Value;
+
+                if (string.IsNullOrWhiteSpace(assemblyName))
+                {
+                    throw new InvalidOperationException(
+                        "A zero-length or whitespace assembly name was supplied to a Serilog.Using configuration statement.");
+                }
+
+                var assembly = Assembly.Load(new AssemblyName(assemblyName));
+                if (!assemblies.ContainsKey(assembly.FullName))
+                {
+                    assemblies.Add(assembly.FullName, assembly);
+                }
+            }
+
+            return assemblies.Values.ToList().AsReadOnly();
         }
 
+        #endregion
     }
 }
