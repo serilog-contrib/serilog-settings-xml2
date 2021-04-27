@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.31205.134
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Serilog.Settings.XML", "src\Serilog.Settings.XML\Serilog.Settings.XML.csproj", "{EFBB9B10-2316-4482-B478-60826A60231C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Serilog.Settings.XML.Tests", "test\Serilog.Settings.XML.Tests\Serilog.Settings.XML.Tests.csproj", "{76B11568-F2B2-4F1B-8B88-DD60ABACF108}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{EFBB9B10-2316-4482-B478-60826A60231C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EFBB9B10-2316-4482-B478-60826A60231C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EFBB9B10-2316-4482-B478-60826A60231C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EFBB9B10-2316-4482-B478-60826A60231C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{76B11568-F2B2-4F1B-8B88-DD60ABACF108}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{76B11568-F2B2-4F1B-8B88-DD60ABACF108}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{76B11568-F2B2-4F1B-8B88-DD60ABACF108}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{76B11568-F2B2-4F1B-8B88-DD60ABACF108}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {EFD1E7CB-FF6C-419B-80B1-711BDAA097CE}
+	EndGlobalSection
+EndGlobal
