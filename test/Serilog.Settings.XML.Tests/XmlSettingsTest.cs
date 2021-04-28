@@ -11,6 +11,12 @@ namespace Serilog.Settings.XML.Tests
 {
     public class XmlSettingsTest
     {
+#if NET452
+        const string FilterLib = "Serilog.Filters.Expressions";
+#else
+        const string FilterLib = "Serilog.Expressions";
+#endif
+
         private static LoggerConfiguration ConfigureXml(string xml)
         {
             XElement xElement = XElement.Parse(xml);
@@ -247,11 +253,11 @@ namespace Serilog.Settings.XML.Tests
         #region Filters
 
         [Fact]
-        public void Filter()
+        public void FilterExpression()
         {
-            const string xml = @"<?xml version=""1.0"" standalone=""yes"" ?>
+            string xml = @$"<?xml version=""1.0"" standalone=""yes"" ?>
 <Serilog>
-    <Using>Serilog.Expressions</Using>
+    <Using>{FilterLib}</Using>
     <Filter Name=""ByIncludingOnly"">
         <Expression>Prop = 42</Expression>
     </Filter>
@@ -272,11 +278,11 @@ namespace Serilog.Settings.XML.Tests
         [Theory]
         [InlineData("$switch1")]
         [InlineData("switch1")]
-        public void FilterSwitch(string switchName)
+        public void FilterExpressionSwitch(string switchName)
         {
             string xml = @$"<?xml version=""1.0"" standalone=""yes"" ?>
 <Serilog>
-    <Using>Serilog.Expressions</Using>
+    <Using>{FilterLib}</Using>
     <FilterSwitches>
         <Switch Name=""{switchName}"" Expression=""Prop = 42"" />
     </FilterSwitches>
@@ -300,11 +306,11 @@ namespace Serilog.Settings.XML.Tests
         [Theory]
         [InlineData("$switch1")]
         [InlineData("switch1")]
-        public void FilterSwitchShort(string switchName)
+        public void FilterExpressionSwitchShort(string switchName)
         {
             string xml = @$"<?xml version=""1.0"" standalone=""yes"" ?>
 <Serilog>
-    <Using>Serilog.Expressions</Using>
+    <Using>{FilterLib}</Using>
     <FilterSwitches>
         <Switch Name=""{switchName}"" Expression=""Prop = 42"" />
     </FilterSwitches>
