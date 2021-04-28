@@ -1,0 +1,11 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <ProjectGuid>af0b98cc-9bf6-4668-955c-3df534e5b0aa</ProjectGuid>
+    <TargetFrameworks>net50;netcoreapp3.1;netcoreapp2.1;net452</TargetFrameworks>
+    <LangVersion>latest</LangVersion>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Serilog" Version="2.10.0" />
+  </ItemGroup>
+</Project>

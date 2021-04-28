@@ -73,7 +73,7 @@ namespace Serilog.Settings.XML
                     return false;
 
                 // https://docs.microsoft.com/en-us/dotnet/csharp/programming-guide/classes-and-structs/object-and-collection-initializers#collection-initializers
-                var addMethod = toType.GetMethods().FirstOrDefault(m => !m.IsStatic && m.Name == "Add" && m.GetParameters()?.Length == 1 && m.GetParameters()[0].ParameterType == elementType);
+                var addMethod = Array.Find(toType.GetMethods(), m => !m.IsStatic && m.Name == "Add" && m.GetParameters()?.Length == 1 && m.GetParameters()[0].ParameterType == elementType);
                 if (addMethod == null)
                     return false;
 

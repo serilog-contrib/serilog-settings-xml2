@@ -74,6 +74,7 @@ namespace Serilog.Settings.XML
             ApplyEnrichment(loggerConfiguration);
             ApplyFilters(loggerConfiguration);
             ApplyDestructuring(loggerConfiguration);
+            ApplySinks(loggerConfiguration);
         }
 
         #region Destructures
@@ -186,6 +187,25 @@ namespace Serilog.Settings.XML
         {
             //var methodCalls = GetMethodCalls(_section);
             //CallConfigurationMethods(methodCalls, FindSinkConfigurationMethods(_configurationAssemblies), loggerSinkConfiguration);
+        }
+
+        private void ApplySinks(LoggerConfiguration loggerConfiguration)
+        {
+            var writeToElements = _section.Elements("WriteTo").ToList();
+            if (writeToElements.Count > 0)
+            {
+                var methodCalls = GetMethodCalls(writeToElements);
+                CallConfigurationMethods(methodCalls, FindSinkConfigurationMethods(_configurationAssemblies), loggerConfiguration.WriteTo);
+            }
+        }
+
+        private static IList<MethodInfo> FindSinkConfigurationMethods(IReadOnlyCollection<Assembly> configurationAssemblies)
+        {
+            var found = FindConfigurationExtensionMethods(configurationAssemblies, typeof(LoggerSinkConfiguration));
+            if (configurationAssemblies.Contains(typeof(LoggerSinkConfiguration).GetTypeInfo().Assembly))
+                found.AddRange(SurrogateConfigurationMethods.WriteTo);
+
+            return found;
         }
 
         #endregion
@@ -353,7 +373,7 @@ namespace Serilog.Settings.XML
                                  .Select(args => new
                                  {
                                      Name = args.Name.LocalName,
-                                     Value = GetArgumentValue(args.FirstNode, _configurationAssemblies)
+                                     Value = GetArgumentValue(args, _configurationAssemblies)
                                  })
                                  .ToDictionary(a => a.Name, a => a.Value)
                         : new Dictionary<string, IConfigurationArgumentValue>()
@@ -378,14 +398,13 @@ namespace Serilog.Settings.XML
 
         internal static IConfigurationArgumentValue GetArgumentValue(XNode argumentNode, IReadOnlyCollection<Assembly> configurationAssemblies)
         {
-            if (argumentNode == null)
-            {
-                throw new InvalidOperationException("Invalid argument");
-            }
-
             if (argumentNode is XText text)
             {
                 return new StringArgumentValue(text.Value);
+            }
+            else if (argumentNode is XElement telement && telement.FirstNode is XText ttext)
+            {
+                return new StringArgumentValue(ttext.Value);
             }
             else if (argumentNode is XElement element)
             {

@@ -24,6 +24,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Serilog.Settings.XML\Serilog.Settings.XML.csproj" />
+    <ProjectReference Include="..\TestDummies\TestDummies.csproj" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'net50'">

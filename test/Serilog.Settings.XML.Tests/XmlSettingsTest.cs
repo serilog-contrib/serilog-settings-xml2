@@ -4,6 +4,7 @@ using Serilog.Events;
 using Serilog.Settings.XML.Tests.Support;
 using System;
 using System.Xml.Linq;
+using TestDummies;
 using Xunit;
 
 namespace Serilog.Settings.XML.Tests
@@ -16,6 +17,112 @@ namespace Serilog.Settings.XML.Tests
             return new LoggerConfiguration()
                 .ReadFrom.Xml(xElement);
         }
+
+        #region Sinks
+
+        [Fact]
+        public void SinksAreConfigured()
+        {
+            const string xml = @"<?xml version=""1.0"" standalone=""yes"" ?>
+<Serilog>
+    <Using>TestDummies</Using>
+    <WriteTo Name=""DummyRollingFile"">
+        <PathFormat>C:\</PathFormat>
+    </WriteTo>
+</Serilog>";
+
+            using var log = ConfigureXml(xml)
+                .CreateLogger();
+
+            DummyRollingFileSink.Reset();
+            DummyRollingFileAuditSink.Reset();
+
+            log.Write(Some.InformationEvent());
+
+            Assert.Single(DummyRollingFileSink.Emitted);
+            Assert.Empty(DummyRollingFileAuditSink.Emitted);
+        }
+
+        [Fact]
+        public void SinkWithStringArrayArgument()
+        {
+            const string xml = @"<?xml version=""1.0"" standalone=""yes"" ?>
+<Serilog>
+    <Using>TestDummies</Using>
+    <WriteTo Name=""DummyRollingFile"">
+        <PathFormat>C:\</PathFormat>
+        <StringArrayBinding>
+            <Item>foo</Item>
+            <Item>bar</Item>
+            <Item>baz</Item>
+        </StringArrayBinding>
+    </WriteTo>
+</Serilog>";
+
+            using var log = ConfigureXml(xml)
+                .CreateLogger();
+
+            DummyRollingFileSink.Reset();
+
+            log.Write(Some.InformationEvent());
+
+            Assert.Single(DummyRollingFileSink.Emitted);
+        }
+
+        [Fact]
+        public void SinkWithIntArrayArgument()
+        {
+            const string xml = @"<?xml version=""1.0"" standalone=""yes"" ?>
+<Serilog>
+    <Using>TestDummies</Using>
+    <WriteTo Name=""DummyRollingFile"">
+        <PathFormat>C:\</PathFormat>
+        <IntArrayBinding>
+            <Item>1</Item>
+            <Item>2</Item>
+            <Item>3</Item>
+        </IntArrayBinding>
+    </WriteTo>
+</Serilog>";
+
+            using var log = ConfigureXml(xml)
+                 .CreateLogger();
+
+            DummyRollingFileSink.Reset();
+
+            log.Write(Some.InformationEvent());
+
+            Assert.Single(DummyRollingFileSink.Emitted);
+        }
+
+        [Fact]
+        public void WriteToLoggerWithRestrictedToMinimumLevelIsSupported()
+        {
+            const string xml = @"<?xml version=""1.0"" standalone=""yes"" ?>
+<Serilog>
+    <Using>TestDummies</Using>
+    <WriteTo Name=""Logger"">
+        <ConfigureLogger>
+            <WriteTo Name=""DummyRollingFile"">
+                <PathFormat>C:\</PathFormat>
+            </WriteTo>
+        </ConfigureLogger>
+        <RestrictedToMinimumLevel>Warning</RestrictedToMinimumLevel>
+    </WriteTo>
+</Serilog>";
+
+            using var log = ConfigureXml(xml)
+                .CreateLogger();
+
+            DummyRollingFileSink.Reset();
+
+            log.Write(Some.InformationEvent());
+            log.Write(Some.WarningEvent());
+
+            Assert.Single(DummyRollingFileSink.Emitted);
+        }
+
+        #endregion
 
         #region Destructures
 
