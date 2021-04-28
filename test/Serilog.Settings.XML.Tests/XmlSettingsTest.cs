@@ -16,6 +16,87 @@ namespace Serilog.Settings.XML.Tests
                 .ReadFrom.Xml(xElement);
         }
 
+        #region Filters
+
+        [Fact]
+        public void Filter()
+        {
+            const string xml = @"<?xml version=""1.0"" standalone=""yes"" ?>
+<Serilog>
+    <Using>Serilog.Expressions</Using>
+    <Filter Name=""ByIncludingOnly"">
+        <Expression>Prop = 42</Expression>
+    </Filter>
+</Serilog>";
+
+            LogEvent evt = null;
+            using Logger log = ConfigureXml(xml)
+                .WriteTo.Sink(new DelegatingSink(e => evt = e))
+                .CreateLogger();
+
+            log.ForContext("Prop", 99).Write(Some.ErrorEvent());
+            Assert.True(evt is null, "Filter for Prop is set. Message should not be logged");
+
+            log.ForContext("Prop", 42).Write(Some.ErrorEvent());
+            Assert.True(evt != null, "Filter for Prop is set. Message should be logged");
+        }
+
+        [Theory]
+        [InlineData("$switch1")]
+        [InlineData("switch1")]
+        public void FilterSwitch(string switchName)
+        {
+            string xml = @$"<?xml version=""1.0"" standalone=""yes"" ?>
+<Serilog>
+    <Using>Serilog.Expressions</Using>
+    <FilterSwitches>
+        <Switch Name=""{switchName}"" Expression=""Prop = 42"" />
+    </FilterSwitches>
+    <Filter Name=""ControlledBy"">
+        <Switch>{switchName}</Switch>
+    </Filter>
+</Serilog>";
+
+            LogEvent evt = null;
+            using Logger log = ConfigureXml(xml)
+                .WriteTo.Sink(new DelegatingSink(e => evt = e))
+                .CreateLogger();
+
+            log.ForContext("Prop", 99).Write(Some.ErrorEvent());
+            Assert.True(evt is null, "Filter for Prop is set. Message should not be logged");
+
+            log.ForContext("Prop", 42).Write(Some.ErrorEvent());
+            Assert.True(evt != null, "Filter for Prop is set. Message should be logged");
+        }
+
+        [Theory]
+        [InlineData("$switch1")]
+        [InlineData("switch1")]
+        public void FilterSwitchShort(string switchName)
+        {
+            string xml = @$"<?xml version=""1.0"" standalone=""yes"" ?>
+<Serilog>
+    <Using>Serilog.Expressions</Using>
+    <FilterSwitches>
+        <Switch Name=""{switchName}"" Expression=""Prop = 42"" />
+    </FilterSwitches>
+    <Filter ControlledBy=""{switchName}"" />
+</Serilog>";
+
+            LogEvent evt = null;
+            using Logger log = ConfigureXml(xml)
+                .WriteTo.Sink(new DelegatingSink(e => evt = e))
+                .CreateLogger();
+
+            log.ForContext("Prop", 99).Write(Some.ErrorEvent());
+            Assert.True(evt is null, "Filter for Prop is set. Message should not be logged");
+
+            log.ForContext("Prop", 42).Write(Some.ErrorEvent());
+            Assert.True(evt != null, "Filter for Prop is set. Message should be logged");
+        }
+
+        #endregion
+
         #region Enrichers
 
         [Fact]

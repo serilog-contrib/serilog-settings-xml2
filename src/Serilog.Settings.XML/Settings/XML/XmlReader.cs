@@ -72,12 +72,89 @@ namespace Serilog.Settings.XML
 
             ApplyMinimumLevel(loggerConfiguration);
             ApplyEnrichment(loggerConfiguration);
+            ApplyFilters(loggerConfiguration);
         }
+
+        #region Filter
 
         private void ProcessFilterSwitchDeclarations()
         {
+            var filterSwitchesElement = _section.Elements("FilterSwitches").FirstOrDefault();
+            var filterSwitches = filterSwitchesElement?.Elements("Switch");
+            if (!(filterSwitches?.Any() ?? false))
+            {
+                return;
+            }
 
+            foreach (var filterSwitchElement in filterSwitches)
+            {
+                var filterSwitch = LoggingFilterSwitchProxy.Create();
+                if (filterSwitch == null)
+                {
+                    SelfLog.WriteLine("FilterSwitches element found, but neither Serilog.Expressions nor Serilog.Filters.Expressions is referenced.");
+                    break;
+                }
+
+                var switchName = filterSwitchElement.Attribute("Name")?.Value;
+                // switchName must be something like $switch to avoid ambiguities
+                if (!IsValidSwitchName(switchName))
+                {
+                    throw new FormatException(@$"""{switchName}"" is not a valid name for a Filter Switch declaration. The first character of the name must be a letter or '$' sign, like <FilterSwitches> <Switch Name=""$switchName"" Expression=""FilterExpression"" /> </FilterSwitches>");
+                }
+
+                SetFilterSwitch(throwOnError: true);
+
+                _resolutionContext.AddFilterSwitch(switchName, filterSwitch);
+
+                void SetFilterSwitch(bool throwOnError)
+                {
+                    var filterExpr = filterSwitchElement.FirstNode?.NodeType == System.Xml.XmlNodeType.Text
+                        ? filterSwitchElement.Value
+                        : filterSwitchElement.Attribute("Expression")?.Value;
+                    if (string.IsNullOrWhiteSpace(filterExpr))
+                    {
+                        filterSwitch.Expression = null;
+                        return;
+                    }
+
+                    try
+                    {
+                        filterSwitch.Expression = filterExpr;
+                    }
+                    catch (Exception e)
+                    {
+                        var errMsg = $"The expression '{filterExpr}' is invalid filter expression: {e.Message}.";
+                        if (throwOnError)
+                        {
+                            throw new InvalidOperationException(errMsg, e);
+                        }
+
+                        SelfLog.WriteLine(errMsg);
+                    }
+                }
+            }
         }
+
+        private void ApplyFilters(LoggerConfiguration loggerConfiguration)
+        {
+            var filterDirective = _section.Elements("Filter").ToList();
+            if (filterDirective.Count > 0)
+            {
+                var methodCalls = GetMethodCalls(filterDirective);
+                CallConfigurationMethods(methodCalls, FindFilterConfigurationMethods(_configurationAssemblies), loggerConfiguration.Filter);
+            }
+        }
+
+        private static IList<MethodInfo> FindFilterConfigurationMethods(IReadOnlyCollection<Assembly> configurationAssemblies)
+        {
+            var found = FindConfigurationExtensionMethods(configurationAssemblies, typeof(LoggerFilterConfiguration));
+            if (configurationAssemblies.Contains(typeof(LoggerFilterConfiguration).GetTypeInfo().Assembly))
+                found.AddRange(SurrogateConfigurationMethods.Filter);
+
+            return found;
+        }
+
+        #endregion
 
         #region Sinks
 
@@ -243,7 +320,7 @@ namespace Serilog.Settings.XML
 
         internal ILookup<string, Dictionary<string, IConfigurationArgumentValue>> GetMethodCalls(IList<XElement> elements)
         {
-            return elements
+            var methodCalls = elements
                 .Select(element => new
                 {
                     Name = element.Attribute("Name")?.Value,
@@ -258,7 +335,21 @@ namespace Serilog.Settings.XML
                         : new Dictionary<string, IConfigurationArgumentValue>()
                 })
                 .Where(p => !string.IsNullOrWhiteSpace(p.Name))
-                .ToLookup(p => p.Name, p => p.Args);
+                .ToList();
+
+            // Convert ControlledBy attribute to method call
+            var controllByCalls = elements.Where(element => !string.IsNullOrWhiteSpace(element.Attribute("ControlledBy")?.Value))
+                        .Select(element => new
+                        {
+                            Name = "ControlledBy",
+                            Args = new Dictionary<string, IConfigurationArgumentValue>()
+                            {
+                                { "Switch", new StringArgumentValue(element.Attribute("ControlledBy").Value) }
+                            }
+                        })
+                        .ToList();
+
+            return methodCalls.Concat(controllByCalls).ToLookup(p => p.Name, p => p.Args);
         }
 
         internal static IConfigurationArgumentValue GetArgumentValue(XNode argumentNode, IReadOnlyCollection<Assembly> configurationAssemblies)
@@ -347,7 +438,7 @@ namespace Serilog.Settings.XML
         #region Switches
 
         internal static bool IsValidSwitchName(string input) =>
-            Regex.IsMatch(input, LevelSwitchNameRegex);
+            !string.IsNullOrWhiteSpace(input) && Regex.IsMatch(input, LevelSwitchNameRegex);
 
         private void ProcessLevelSwitchDeclarations()
         {

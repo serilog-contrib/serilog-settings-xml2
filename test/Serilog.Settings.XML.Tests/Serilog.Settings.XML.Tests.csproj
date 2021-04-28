@@ -26,4 +26,22 @@
     <ProjectReference Include="..\..\src\Serilog.Settings.XML\Serilog.Settings.XML.csproj" />
   </ItemGroup>
 
+  <ItemGroup Condition="'$(TargetFramework)' == 'net50'">
+    <PackageReference Include="Serilog.Expressions">
+      <Version>2.0.0</Version>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'netcoreapp3.1'">
+    <PackageReference Include="Serilog.Expressions">
+      <Version>2.0.0</Version>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'netcoreapp2.1'">
+    <PackageReference Include="Serilog.Expressions">
+      <Version>2.0.0</Version>
+    </PackageReference>
+  </ItemGroup>
+
 </Project>
