@@ -2,6 +2,7 @@ using Serilog.Core;
 using Serilog.Enrichers;
 using Serilog.Events;
 using Serilog.Settings.XML.Tests.Support;
+using System;
 using System.Xml.Linq;
 using Xunit;
 
@@ -15,6 +16,126 @@ namespace Serilog.Settings.XML.Tests
             return new LoggerConfiguration()
                 .ReadFrom.Xml(xElement);
         }
+
+        #region Destructures
+
+        private static string GetDestructuredProperty(object x, string xml)
+        {
+            LogEvent evt = null;
+            using var log = ConfigureXml(xml)
+                .WriteTo.Sink(new DelegatingSink(e => evt = e))
+                .CreateLogger();
+            log.Information("{@X}", x);
+            var result = evt.Properties["X"].ToString();
+            return result;
+        }
+
+        [Fact]
+        public void DestructureLimitsNestingDepth()
+        {
+            const string xml = @"<?xml version=""1.0"" standalone=""yes"" ?>
+<Serilog>
+    <Destructure Name=""ToMaximumDepth"">
+        <MaximumDestructuringDepth>3</MaximumDestructuringDepth>
+    </Destructure>
+</Serilog>";
+
+            var NestedObject = new
+            {
+                A = new
+                {
+                    B = new
+                    {
+                        C = new
+                        {
+                            D = "F"
+                        }
+                    }
+                }
+            };
+
+            var msg = GetDestructuredProperty(NestedObject, xml);
+
+            Assert.Contains("C", msg);
+            Assert.DoesNotContain("D", msg);
+        }
+
+        [Fact]
+        public void DestructureLimitsStringLength()
+        {
+            const string xml = @"<?xml version=""1.0"" standalone=""yes"" ?>
+<Serilog>
+    <Destructure Name=""ToMaximumStringLength"">
+        <MaximumStringLength>3</MaximumStringLength>
+    </Destructure>
+</Serilog>";
+
+            var inputString = "ABCDEFGH";
+            var msg = GetDestructuredProperty(inputString, xml);
+
+            Assert.Equal("\"AB…\"", msg);
+        }
+
+        [Fact]
+        public void DestructureLimitsCollectionCount()
+        {
+            const string xml = @"<?xml version=""1.0"" standalone=""yes"" ?>
+<Serilog>
+    <Destructure Name=""ToMaximumCollectionCount"">
+        <MaximumCollectionCount>3</MaximumCollectionCount>
+    </Destructure>
+</Serilog>";
+
+            var collection = new[] { 1, 2, 3, 4, 5, 6 };
+            var msg = GetDestructuredProperty(collection, xml);
+
+            Assert.Contains("3", msg);
+            Assert.DoesNotContain("4", msg);
+        }
+
+        [Fact]
+        public void DestructuringAsScalarIsAppliedWithShortTypeName()
+        {
+            const string xml = @"<?xml version=""1.0"" standalone=""yes"" ?>
+<Serilog>
+    <Destructure Name=""AsScalar"">
+        <ScalarType>System.Version</ScalarType>
+    </Destructure>
+</Serilog>";
+
+            LogEvent evt = null;
+            using var log = ConfigureXml(xml)
+                .WriteTo.Sink(new DelegatingSink(e => evt = e))
+                .CreateLogger();
+
+            log.Information("Destructuring as scalar {@Scalarized}", new Version(2, 3));
+            var prop = evt.Properties["Scalarized"];
+
+            Assert.IsType<ScalarValue>(prop);
+        }
+
+        [Fact]
+        public void DestructuringAsScalarIsAppliedWithAssemblyQualifiedName()
+        {
+            string xml = @$"<?xml version=""1.0"" standalone=""yes"" ?>
+<Serilog>
+    <Destructure Name=""AsScalar"">
+        <ScalarType>{typeof(Version).AssemblyQualifiedName}</ScalarType>
+    </Destructure>
+</Serilog>";
+
+            LogEvent evt = null;
+            using var log = ConfigureXml(xml)
+                .WriteTo.Sink(new DelegatingSink(e => evt = e))
+                .CreateLogger();
+
+            log.Information("Destructuring as scalar {@Scalarized}", new Version(2, 3));
+            var prop = evt.Properties["Scalarized"];
+
+            Assert.IsType<ScalarValue>(prop);
+        }
+
+        #endregion
 
         #region Filters
 

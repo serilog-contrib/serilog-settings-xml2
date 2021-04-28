@@ -73,7 +73,31 @@ namespace Serilog.Settings.XML
             ApplyMinimumLevel(loggerConfiguration);
             ApplyEnrichment(loggerConfiguration);
             ApplyFilters(loggerConfiguration);
+            ApplyDestructuring(loggerConfiguration);
         }
+
+        #region Destructures
+
+        private void ApplyDestructuring(LoggerConfiguration loggerConfiguration)
+        {
+            var destructureElements = _section.Elements("Destructure").ToList();
+            if (destructureElements.Count > 0)
+            {
+                var methodCalls = GetMethodCalls(destructureElements);
+                CallConfigurationMethods(methodCalls, FindDestructureConfigurationMethods(_configurationAssemblies), loggerConfiguration.Destructure);
+            }
+        }
+
+        private static IList<MethodInfo> FindDestructureConfigurationMethods(IReadOnlyCollection<Assembly> configurationAssemblies)
+        {
+            var found = FindConfigurationExtensionMethods(configurationAssemblies, typeof(LoggerDestructuringConfiguration));
+            if (configurationAssemblies.Contains(typeof(LoggerDestructuringConfiguration).GetTypeInfo().Assembly))
+                found.AddRange(SurrogateConfigurationMethods.Destructure);
+
+            return found;
+        }
+
+        #endregion
 
         #region Filter
 
