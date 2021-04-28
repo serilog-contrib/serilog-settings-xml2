@@ -476,7 +476,9 @@ namespace Serilog.Settings.XML
             foreach (var levelSwitch in levelSwitches)
             {
                 string switchName = levelSwitch.Attribute("Name")?.Value;
-                string switchInitialLevel = levelSwitch.Attribute("Level")?.Value;
+                string switchInitialLevel = levelSwitch.FirstNode?.NodeType == System.Xml.XmlNodeType.Text
+                    ? levelSwitch.Value
+                    : levelSwitch.Attribute("Level")?.Value;
 
                 // switchName must be something like $switch to avoid ambiguities
                 if (!IsValidSwitchName(switchName))

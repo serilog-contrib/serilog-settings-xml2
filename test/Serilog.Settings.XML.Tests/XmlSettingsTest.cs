@@ -423,7 +423,7 @@ namespace Serilog.Settings.XML.Tests
             string xml = @$"<?xml version=""1.0"" standalone=""yes"" ?>
 <Serilog>
     <LevelSwitches>
-        <Switch Name=""{switchName}"" Level=""Warning"" />
+        <Switch Name=""{switchName}"">Warning</Switch>
     </LevelSwitches>
     <MinimumLevel Default=""Debug"">
         <Override Source=""System"" ControlledBy=""{switchName}"" />
