@@ -186,6 +186,7 @@ namespace Serilog.Settings.XML
 
         void IXmlReader.ApplySinks(LoggerSinkConfiguration loggerSinkConfiguration)
         {
+            throw new NotImplementedException("Not implemented. Please report use case!");
             //var methodCalls = GetMethodCalls(_section);
             //CallConfigurationMethods(methodCalls, FindSinkConfigurationMethods(_configurationAssemblies), loggerSinkConfiguration);
         }
@@ -237,13 +238,14 @@ namespace Serilog.Settings.XML
 
         void IXmlReader.ApplyEnrichment(LoggerEnrichmentConfiguration loggerEnrichmentConfiguration)
         {
+            throw new NotImplementedException("Not implemented. Please report use case!");
             //var methodCalls = GetMethodCalls(_section);
             //CallConfigurationMethods(methodCalls, FindEventEnricherConfigurationMethods(_configurationAssemblies), loggerEnrichmentConfiguration);
         }
 
         private void ApplyEnrichment(LoggerConfiguration loggerConfiguration)
         {
-            var enricherElements = GetElements(_section, "Enricher");
+            var enricherElements = GetElements(_section, "Enrich");
             if (enricherElements.Count > 0)
             {
                 var methodCalls = GetMethodCalls(enricherElements);

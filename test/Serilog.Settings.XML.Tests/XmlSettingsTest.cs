@@ -511,7 +511,7 @@ namespace Serilog.Settings.XML.Tests
             const string xml = @"<?xml version=""1.0"" standalone=""yes"" ?>
 <Serilog>
     <Using>Serilog.Enrichers.Thread</Using>
-    <Enricher Name=""WithThreadId"" />
+    <Enrich Name=""WithThreadId"" />
 </Serilog>";
 
             LogEvent evt = null;
@@ -529,10 +529,10 @@ namespace Serilog.Settings.XML.Tests
         {
             const string xml = @"<?xml version=""1.0"" standalone=""yes"" ?>
 <Serilog>
-    <Enricher Name=""WithProperty"">
+    <Enrich Name=""WithProperty"">
         <Name>MyProperty</Name>
         <Value>123</Value>
-    </Enricher>
+    </Enrich>
 </Serilog>";
 
             LogEvent evt = null;
@@ -550,10 +550,10 @@ namespace Serilog.Settings.XML.Tests
         {
             const string xml = @"<?xml version=""1.0"" standalone=""yes"" ?>
 <Serilog>
-    <Enricher Name=""WithProperty"">
+    <Enrich Name=""WithProperty"">
         <Name>Serilog.Enrichers.ThreadNameEnricher::ThreadNamePropertyName, Serilog.Enrichers.Thread</Name>
         <Value>DefaultThread</Value>
-    </Enricher>
+    </Enrich>
 </Serilog>";
 
             LogEvent evt = null;
@@ -608,9 +608,9 @@ namespace Serilog.Settings.XML.Tests
             string xml = @$"<?xml version=""1.0"" standalone=""yes"" ?>
 <Serilog>
     <Using>TestDummies</Using>
-    <Enricher Name=""With"">
+    <Enrich Name=""With"">
         <Enricher>{typeof(DummyThreadIdEnricher).AssemblyQualifiedName}</Enricher>
-    </Enricher>
+    </Enrich>
 </Serilog>";
 
             LogEvent evt = null;
