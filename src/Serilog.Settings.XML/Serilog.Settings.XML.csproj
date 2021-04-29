@@ -1,14 +1,14 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <Description>XML settings support for Serilog.</Description>
-    <VersionPrefix>1.0.0</VersionPrefix>
-    <LangVersion>preview</LangVersion>
+    <VersionPrefix>3.1.0</VersionPrefix>
     <TargetFrameworks>netstandard2.0;net452;net461</TargetFrameworks>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <PackageId>Serilog.Settings.XML</PackageId>
+    <PackageId>Serilog.Settings.XML2</PackageId>
     <PackageTags>serilog;xml</PackageTags>
     <PackageIcon>icon.png</PackageIcon>
+    <LangVersion>preview</LangVersion>
     <PackageProjectUrl>https://github.com/Khaos66/serilog-settings-xml/</PackageProjectUrl>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <RootNamespace>Serilog</RootNamespace>
@@ -16,6 +16,11 @@
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <Authors>Khaos</Authors>
+    <Company>KhaosCoders</Company>
+    <RepositoryUrl>https://github.com/KhaosCoders/serilog-settings-xml</RepositoryUrl>
+    <PackageReleaseNotes>Initial release</PackageReleaseNotes>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
   </PropertyGroup>
 
   <ItemGroup>
