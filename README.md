@@ -1,4 +1,4 @@
-# Serilog.Settings.XML 
+# Serilog.Settings.XML2
 
 A Serilog settings provider that reads from XML sources, like `XML files` or [XElement](https://docs.microsoft.com/de-de/dotnet/api/system.xml.linq.xelement). This is a fork of the [Serilog.Settings.Configuration](https://github.com/serilog/serilog-settings-configuration) and supoorts most of its use cases, but with much less dependencies.
 
