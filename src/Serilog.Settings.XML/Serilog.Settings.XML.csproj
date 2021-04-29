@@ -3,7 +3,7 @@
     <Description>XML settings support for Serilog.</Description>
     <VersionPrefix>1.0.0</VersionPrefix>
     <LangVersion>preview</LangVersion>
-    <TargetFrameworks>netstandard2.0;net451;net461</TargetFrameworks>
+    <TargetFrameworks>netstandard2.0;net452;net461</TargetFrameworks>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <PackageId>Serilog.Settings.XML</PackageId>

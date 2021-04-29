@@ -24,6 +24,52 @@ namespace Serilog.Settings.XML.Tests
                 .ReadFrom.Xml(xElement);
         }
 
+        #region Audit-Sinks
+
+        [Fact]
+        public void AuditToSinkIsAppliedWithCustomSink()
+        {
+            string xml = @$"<?xml version=""1.0"" standalone=""yes"" ?>
+<Serilog>
+    <Using>TestDummies</Using>
+    <AuditTo Name=""Sink"">
+        <Sink>{typeof(DummyRollingFileSink).AssemblyQualifiedName}</Sink>
+    </AuditTo>
+</Serilog>";
+
+            using var log = ConfigureXml(xml)
+                .CreateLogger();
+
+            DummyRollingFileSink.Reset();
+            log.Write(Some.InformationEvent());
+
+            Assert.Single(DummyRollingFileSink.Emitted);
+        }
+
+        [Fact]
+        public void AuditToSinkIsAppliedWithCustomSinkAndMinimumLevel()
+        {
+            string xml = @$"<?xml version=""1.0"" standalone=""yes"" ?>
+<Serilog>
+    <Using>TestDummies</Using>
+    <AuditTo Name=""Sink"">
+        <Sink>{typeof(DummyRollingFileSink).AssemblyQualifiedName}</Sink>
+        <RestrictedToMinimumLevel>Warning</RestrictedToMinimumLevel>
+    </AuditTo>
+</Serilog>";
+
+            using var log = ConfigureXml(xml)
+                .CreateLogger();
+
+            DummyRollingFileSink.Reset();
+            log.Write(Some.InformationEvent());
+            log.Write(Some.WarningEvent());
+
+            Assert.Single(DummyRollingFileSink.Emitted);
+        }
+
+        #endregion
+
         #region Sinks
 
         [Fact]
@@ -36,6 +82,29 @@ namespace Serilog.Settings.XML.Tests
         <PathFormat>C:\</PathFormat>
     </WriteTo>
 </Serilog>";
+
+            using var log = ConfigureXml(xml)
+                .CreateLogger();
+
+            DummyRollingFileSink.Reset();
+            DummyRollingFileAuditSink.Reset();
+
+            log.Write(Some.InformationEvent());
+
+            Assert.Single(DummyRollingFileSink.Emitted);
+            Assert.Empty(DummyRollingFileAuditSink.Emitted);
+        }
+
+        [Fact]
+        public void SinksAreConfiguredLowercase()
+        {
+            const string xml = @"<?xml version=""1.0"" standalone=""yes"" ?>
+<serilog>
+    <using>TestDummies</using>
+    <writeto name=""DummyRollingFile"">
+        <pathformat>C:\</pathformat>
+    </writeto>
+</serilog>";
 
             using var log = ConfigureXml(xml)
                 .CreateLogger();
@@ -124,6 +193,37 @@ namespace Serilog.Settings.XML.Tests
 
             log.Write(Some.InformationEvent());
             log.Write(Some.WarningEvent());
+
+            Assert.Single(DummyRollingFileSink.Emitted);
+        }
+
+        [Fact]
+        public void SinkWithConfigurationBindingArgument()
+        {
+            const string xml = @"<?xml version=""1.0"" standalone=""yes"" ?>
+<Serilog>
+    <Using>TestDummies</Using>
+    <WriteTo Name=""DummyRollingFile"">
+        <PathFormat>C:\</PathFormat>
+        <ObjectBinding>
+            <Binding>
+                <Foo>Bar</Foo>
+                <Abc>Xyz</Abc>
+            </Binding>
+            <Binding>
+                <Foo>Bar2</Foo>
+                <Abc>Xyz2</Abc>
+            </Binding>
+        </ObjectBinding>
+    </WriteTo>
+</Serilog>";
+
+            using var log = ConfigureXml(xml)
+                .CreateLogger();
+
+            DummyRollingFileSink.Reset();
+
+            log.Write(Some.InformationEvent());
 
             Assert.Single(DummyRollingFileSink.Emitted);
         }
@@ -248,6 +348,42 @@ namespace Serilog.Settings.XML.Tests
             Assert.IsType<ScalarValue>(prop);
         }
 
+        [Fact]
+        public void DestructureWithCollectionsOfTypeArgument()
+        {
+            DummyPolicy.Current = null;
+
+            const string xml = @"<?xml version=""1.0"" standalone=""yes"" ?>
+<Serilog>
+    <Using>TestDummies</Using>
+    <Destructure Name=""DummyArrayOfType"">
+        <List>
+            <Item>System.Byte</Item>
+            <Item>System.Int16</Item>
+        </List>
+        <Array>
+            <Item>System.Int32</Item>
+            <Item>System.String</Item>
+        </Array>
+        <Type>System.TimeSpan</Type>
+        <Custom>
+            <Item>System.Int64</Item>
+        </Custom>
+        <CustomString>
+            <Item>System.UInt32</Item>
+        </CustomString>
+    </Destructure>
+</Serilog>";
+
+            ConfigureXml(xml);
+
+            Assert.Equal(typeof(TimeSpan), DummyPolicy.Current.Type);
+            Assert.Equal(new[] { typeof(int), typeof(string) }, DummyPolicy.Current.Array);
+            Assert.Equal(new[] { typeof(byte), typeof(short) }, DummyPolicy.Current.List);
+            Assert.Equal(typeof(long), DummyPolicy.Current.Custom.First);
+            Assert.Equal("System.UInt32", DummyPolicy.Current.CustomStrings.First);
+        }
+
         #endregion
 
         #region Filters
@@ -327,6 +463,42 @@ namespace Serilog.Settings.XML.Tests
 
             log.ForContext("Prop", 42).Write(Some.ErrorEvent());
             Assert.True(evt != null, "Filter for Prop is set. Message should be logged");
+        }
+
+        [Fact]
+        public void FilterWithIsAppliedWithCustomFilter()
+        {
+            LogEvent evt = null;
+
+            var json = $@"{{
+                ""Serilog"": {{
+                    ""Using"": [""TestDummies""],
+                    ""Filter"": [
+                    {{
+                        ""Name"": ""With"",
+                        ""Args"": {{
+                            ""filter"": ""{typeof(DummyAnonymousUserFilter).AssemblyQualifiedName}""
+                        }}
+                    }}]
+                }}
+            }}";
+
+            string xml = @$"<?xml version=""1.0"" standalone=""yes"" ?>
+<Serilog>
+    <Using>TestDummies</Using>
+    <Filter Name=""With"">
+        <Filter>{typeof(DummyAnonymousUserFilter).AssemblyQualifiedName}</Filter>
+    </Filter>
+</Serilog>";
+
+            using Logger log = ConfigureXml(xml)
+               .WriteTo.Sink(new DelegatingSink(e => evt = e))
+                .CreateLogger();
+
+            log.ForContext("User", "anonymous").Write(Some.InformationEvent());
+            Assert.Null(evt);
+            log.ForContext("User", "the user").Write(Some.InformationEvent());
+            Assert.NotNull(evt);
         }
 
         #endregion
@@ -428,6 +600,28 @@ namespace Serilog.Settings.XML.Tests
             log.Write(Some.ErrorEvent());
 
             Assert.True(evt.Properties.ContainsKey("MyProperty"), "Property was configured. It should be enriched.");
+        }
+
+        [Fact]
+        public void EnrichWithIsAppliedWithCustomEnricher()
+        {
+            string xml = @$"<?xml version=""1.0"" standalone=""yes"" ?>
+<Serilog>
+    <Using>TestDummies</Using>
+    <Enricher Name=""With"">
+        <Enricher>{typeof(DummyThreadIdEnricher).AssemblyQualifiedName}</Enricher>
+    </Enricher>
+</Serilog>";
+
+            LogEvent evt = null;
+            using Logger log = ConfigureXml(xml)
+                .WriteTo.Sink(new DelegatingSink(e => evt = e))
+                .CreateLogger();
+
+            log.Write(Some.InformationEvent());
+
+            Assert.NotNull(evt);
+            Assert.True(evt.Properties.ContainsKey("ThreadId"), "Event should have enriched property ThreadId");
         }
 
         #endregion

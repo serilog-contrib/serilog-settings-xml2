@@ -48,7 +48,45 @@ namespace Serilog.Settings.XML
             if (IsContainer(toType, out var elementType) && TryCreateContainer(out var result))
                 return result;
 
-            return Convert.ChangeType(_section, toType);
+            // Try to deserialize
+            return CreateObject();
+
+            object CreateObject()
+            {
+                if (toType.GetConstructor(Type.EmptyTypes) == null)
+                {
+                    throw new InvalidOperationException($"Binding type {toType.FullName} has no empty constructor");
+                }
+
+                var configurationElements = _section
+                    .Elements()
+                    .Select(element => new
+                    {
+                        Name = element.Name.LocalName,
+                        Element = element
+                    })
+                    .ToList();
+                var properties = toType
+                    .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                    .Select(prop => new
+                    {
+                        Property = prop,
+                        Element = configurationElements.Find(element => element.Name.Equals(prop.Name, StringComparison.OrdinalIgnoreCase))?.Element
+                    })
+                    .Where(prop => prop.Element != null)
+                    .ToList();
+
+                object result = Activator.CreateInstance(toType);
+
+                foreach (var property in properties)
+                {
+                    var propertyValue = XmlReader.GetArgumentValue(property.Element, _configurationAssemblies);
+                    var value = propertyValue.ConvertTo(property.Property.PropertyType, resolutionContext);
+                    property.Property.SetValue(result, value);
+                }
+
+                return result;
+            }
 
             object CreateArray()
             {

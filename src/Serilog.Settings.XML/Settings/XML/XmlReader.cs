@@ -75,13 +75,14 @@ namespace Serilog.Settings.XML
             ApplyFilters(loggerConfiguration);
             ApplyDestructuring(loggerConfiguration);
             ApplySinks(loggerConfiguration);
+            ApplyAuditSinks(loggerConfiguration);
         }
 
         #region Destructures
 
         private void ApplyDestructuring(LoggerConfiguration loggerConfiguration)
         {
-            var destructureElements = _section.Elements("Destructure").ToList();
+            var destructureElements = GetElements(_section, "Destructure");
             if (destructureElements.Count > 0)
             {
                 var methodCalls = GetMethodCalls(destructureElements);
@@ -104,8 +105,8 @@ namespace Serilog.Settings.XML
 
         private void ProcessFilterSwitchDeclarations()
         {
-            var filterSwitchesElement = _section.Elements("FilterSwitches").FirstOrDefault();
-            var filterSwitches = filterSwitchesElement?.Elements("Switch");
+            var filterSwitchesElement = GetElements(_section, "FilterSwitches").FirstOrDefault();
+            var filterSwitches = GetElements(filterSwitchesElement, "Switch");
             if (!(filterSwitches?.Any() ?? false))
             {
                 return;
@@ -120,7 +121,7 @@ namespace Serilog.Settings.XML
                     break;
                 }
 
-                var switchName = filterSwitchElement.Attribute("Name")?.Value;
+                var switchName = GetAttribute(filterSwitchElement, "Name")?.Value;
                 // switchName must be something like $switch to avoid ambiguities
                 if (!IsValidSwitchName(switchName))
                 {
@@ -135,7 +136,7 @@ namespace Serilog.Settings.XML
                 {
                     var filterExpr = filterSwitchElement.FirstNode?.NodeType == System.Xml.XmlNodeType.Text
                         ? filterSwitchElement.Value
-                        : filterSwitchElement.Attribute("Expression")?.Value;
+                        : GetAttribute(filterSwitchElement, "Expression")?.Value;
                     if (string.IsNullOrWhiteSpace(filterExpr))
                     {
                         filterSwitch.Expression = null;
@@ -162,7 +163,7 @@ namespace Serilog.Settings.XML
 
         private void ApplyFilters(LoggerConfiguration loggerConfiguration)
         {
-            var filterDirective = _section.Elements("Filter").ToList();
+            var filterDirective = GetElements(_section, "Filter");
             if (filterDirective.Count > 0)
             {
                 var methodCalls = GetMethodCalls(filterDirective);
@@ -191,7 +192,7 @@ namespace Serilog.Settings.XML
 
         private void ApplySinks(LoggerConfiguration loggerConfiguration)
         {
-            var writeToElements = _section.Elements("WriteTo").ToList();
+            var writeToElements = GetElements(_section, "WriteTo");
             if (writeToElements.Count > 0)
             {
                 var methodCalls = GetMethodCalls(writeToElements);
@@ -210,6 +211,28 @@ namespace Serilog.Settings.XML
 
         #endregion
 
+        #region Audit-Sinks
+
+        private void ApplyAuditSinks(LoggerConfiguration loggerConfiguration)
+        {
+            var auditToElements = GetElements(_section, "AuditTo");
+            if (auditToElements.Count > 0)
+            {
+                var methodCalls = GetMethodCalls(auditToElements);
+                CallConfigurationMethods(methodCalls, FindAuditSinkConfigurationMethods(_configurationAssemblies), loggerConfiguration.AuditTo);
+            }
+        }
+
+        private static IList<MethodInfo> FindAuditSinkConfigurationMethods(IReadOnlyCollection<Assembly> configurationAssemblies)
+        {
+            var found = FindConfigurationExtensionMethods(configurationAssemblies, typeof(LoggerAuditSinkConfiguration));
+            if (configurationAssemblies.Contains(typeof(LoggerAuditSinkConfiguration).GetTypeInfo().Assembly))
+                found.AddRange(SurrogateConfigurationMethods.AuditTo);
+            return found;
+        }
+
+        #endregion
+
         #region Enrichment
 
         void IXmlReader.ApplyEnrichment(LoggerEnrichmentConfiguration loggerEnrichmentConfiguration)
@@ -220,22 +243,22 @@ namespace Serilog.Settings.XML
 
         private void ApplyEnrichment(LoggerConfiguration loggerConfiguration)
         {
-            var enricherElements = _section.Elements("Enricher").ToList();
+            var enricherElements = GetElements(_section, "Enricher");
             if (enricherElements.Count > 0)
             {
                 var methodCalls = GetMethodCalls(enricherElements);
                 CallConfigurationMethods(methodCalls, FindEventEnricherConfigurationMethods(_configurationAssemblies), loggerConfiguration.Enrich);
             }
 
-            var propertyElements = _section.Elements("Property").ToList();
+            var propertyElements = GetElements(_section, "Property");
             if (propertyElements.Count > 0)
             {
                 foreach (XElement propertyElement in propertyElements)
                 {
-                    string name = propertyElement.Attribute("Name")?.Value;
+                    string name = GetAttribute(propertyElement, "Name")?.Value;
                     string value = propertyElement.FirstNode?.NodeType == System.Xml.XmlNodeType.Text
                         ? propertyElement.Value
-                        : propertyElement.Attribute("Value")?.Value;
+                        : GetAttribute(propertyElement, "Value")?.Value;
 
                     if (string.IsNullOrWhiteSpace(name))
                     {
@@ -367,7 +390,7 @@ namespace Serilog.Settings.XML
             var methodCalls = elements
                 .Select(element => new
                 {
-                    Name = element.Attribute("Name")?.Value,
+                    Name = GetAttribute(element, "Name")?.Value,
                     Args = element.HasElements
                         ? element.Elements()
                                  .Select(args => new
@@ -382,13 +405,13 @@ namespace Serilog.Settings.XML
                 .ToList();
 
             // Convert ControlledBy attribute to method call
-            var controllByCalls = elements.Where(element => !string.IsNullOrWhiteSpace(element.Attribute("ControlledBy")?.Value))
+            var controllByCalls = elements.Where(element => !string.IsNullOrWhiteSpace(GetAttribute(element, "ControlledBy")?.Value))
                         .Select(element => new
                         {
                             Name = "ControlledBy",
                             Args = new Dictionary<string, IConfigurationArgumentValue>()
                             {
-                                { "Switch", new StringArgumentValue(element.Attribute("ControlledBy").Value) }
+                                { "Switch", new StringArgumentValue(GetAttribute(element, "ControlledBy").Value) }
                             }
                         })
                         .ToList();
@@ -420,7 +443,7 @@ namespace Serilog.Settings.XML
 
         private void ApplyMinimumLevel(LoggerConfiguration loggerConfiguration)
         {
-            XElement minimumLevel = _section.Elements("MinimumLevel").FirstOrDefault();
+            XElement minimumLevel = GetElements(_section, "MinimumLevel").FirstOrDefault();
             if (minimumLevel == null)
             {
                 return;
@@ -428,13 +451,13 @@ namespace Serilog.Settings.XML
 
             string defaultMinLevel = minimumLevel.FirstNode?.NodeType == System.Xml.XmlNodeType.Text
                 ? minimumLevel.Value
-                : minimumLevel.Attribute("Default")?.Value;
+                : GetAttribute(minimumLevel, "Default")?.Value;
             if (!string.IsNullOrWhiteSpace(defaultMinLevel))
             {
                 ApplyMinimumLevel(defaultMinLevel, (configuration, levelSwitch) => configuration.ControlledBy(levelSwitch));
             }
 
-            string controlledBy = minimumLevel.Attribute("ControlledBy")?.Value;
+            string controlledBy = GetAttribute(minimumLevel, "ControlledBy")?.Value;
             if (!string.IsNullOrWhiteSpace(controlledBy))
             {
                 var globalMinimumLevelSwitch = _resolutionContext.LookUpLevelSwitchByName(controlledBy);
@@ -442,10 +465,10 @@ namespace Serilog.Settings.XML
                 loggerConfiguration.MinimumLevel.ControlledBy(globalMinimumLevelSwitch);
             }
 
-            foreach (XElement @override in minimumLevel.Elements("Override"))
+            foreach (XElement @override in GetElements(minimumLevel, "Override"))
             {
-                string source = @override?.Attribute("Source")?.Value;
-                controlledBy = @override?.Attribute("ControlledBy")?.Value;
+                string source = GetAttribute(@override, "Source")?.Value;
+                controlledBy = GetAttribute(@override, "ControlledBy")?.Value;
 
                 if (!string.IsNullOrWhiteSpace(controlledBy))
                 {
@@ -485,8 +508,8 @@ namespace Serilog.Settings.XML
 
         private void ProcessLevelSwitchDeclarations()
         {
-            var levelSwitchesElement = _section.Elements("LevelSwitches").FirstOrDefault();
-            var levelSwitches = levelSwitchesElement?.Elements("Switch");
+            var levelSwitchesElement = GetElements(_section, "LevelSwitches").FirstOrDefault();
+            var levelSwitches = GetElements(levelSwitchesElement, "Switch");
             if (!(levelSwitches?.Any() ?? false))
             {
                 return;
@@ -494,10 +517,10 @@ namespace Serilog.Settings.XML
 
             foreach (var levelSwitch in levelSwitches)
             {
-                string switchName = levelSwitch.Attribute("Name")?.Value;
+                string switchName = GetAttribute(levelSwitch, "Name")?.Value;
                 string switchInitialLevel = levelSwitch.FirstNode?.NodeType == System.Xml.XmlNodeType.Text
                     ? levelSwitch.Value
-                    : levelSwitch.Attribute("Level")?.Value;
+                    : GetAttribute(levelSwitch, "Level")?.Value;
 
                 // switchName must be something like $switch to avoid ambiguities
                 if (!IsValidSwitchName(switchName))
@@ -530,11 +553,11 @@ namespace Serilog.Settings.XML
             var serilogAssembly = typeof(ILogger).Assembly;
             var assemblies = new Dictionary<string, Assembly> { [serilogAssembly.FullName] = serilogAssembly };
 
-            foreach (var usingElement in _section.Elements("Using"))
+            foreach (var usingElement in GetElements(_section, "Using"))
             {
                 var assemblyName = usingElement.FirstNode?.NodeType == System.Xml.XmlNodeType.Text
                     ? usingElement.Value
-                    : usingElement.Attribute("Asm")?.Value;
+                    : GetAttribute(usingElement, "Asm")?.Value;
 
                 if (string.IsNullOrWhiteSpace(assemblyName))
                 {
@@ -553,5 +576,11 @@ namespace Serilog.Settings.XML
         }
 
         #endregion
+
+        private static IList<XElement> GetElements(XElement element, string name) =>
+            element?.Elements()?.Where(e => e.Name.LocalName.Equals(name, StringComparison.OrdinalIgnoreCase))?.ToList();
+
+        private static XAttribute GetAttribute(XElement element, string name) =>
+           element?.Attributes()?.Where(e => e.Name.LocalName.Equals(name, StringComparison.OrdinalIgnoreCase))?.FirstOrDefault();
     }
 }

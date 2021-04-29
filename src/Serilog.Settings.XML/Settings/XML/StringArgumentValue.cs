@@ -93,7 +93,7 @@ namespace Serilog.Settings.XML
 
                     throw new InvalidOperationException($"Could not find a public static property or field with name `{memberName}` on type `{accessorTypeName}`");
                 }
-                else if (!toTypeInfo.IsAnsiClass)
+                else if (toTypeInfo.IsInterface || toTypeInfo.IsAbstract)
                 {
                     // maybe it's the assembly-qualified type name of a concrete implementation
                     // with a default constructor
