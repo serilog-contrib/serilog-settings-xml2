@@ -16,11 +16,11 @@ namespace Serilog.Settings.XML
     {
         private const string LevelSwitchNameRegex = @"^\${0,1}[A-Za-z]+[A-Za-z0-9]*$";
 
-        readonly XElement _section;
+        private readonly XElement _section;
 
-        readonly IReadOnlyCollection<Assembly> _configurationAssemblies;
+        private readonly IReadOnlyCollection<Assembly> _configurationAssemblies;
 
-        readonly ResolutionContext _resolutionContext = new();
+        private readonly ResolutionContext _resolutionContext = new();
 
         /// <summary>
         /// Creates a new instance of <see cref="XmlReader"/>
@@ -32,13 +32,15 @@ namespace Serilog.Settings.XML
             XElement doc = LoadXMLFile(xmlFile);
             _section = GetSection(doc, sectionName);
             _configurationAssemblies = LoadAssemblies();
+            if (_section == null)
+            {
+                throw new InvalidOperationException($"XML section {sectionName} not found in root");
+            }
         }
-
 
         public XmlReader(XElement section)
         {
-            if (section == null) throw new ArgumentNullException(nameof(section));
-            _section = section;
+            _section = section ?? throw new ArgumentNullException(nameof(section));
             _configurationAssemblies = LoadAssemblies();
         }
 
@@ -63,7 +65,10 @@ namespace Serilog.Settings.XML
         /// <param name="doc"></param>
         /// <param name="sectionName"></param>
         /// <returns></returns>
-        private XElement GetSection(XElement doc, string sectionName) => doc.Elements(sectionName).First();
+        private XElement GetSection(XElement doc, string sectionName) =>
+            doc.Name.LocalName.Equals(sectionName, StringComparison.OrdinalIgnoreCase)
+            ? doc
+            : doc.Elements().FirstOrDefault(element => element.Name.LocalName.Equals(sectionName, StringComparison.OrdinalIgnoreCase));
 
         public void Configure(LoggerConfiguration loggerConfiguration)
         {
